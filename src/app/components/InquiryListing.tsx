@@ -760,7 +760,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
                       <td className="p-4 font-bold text-primary-600 dark:text-primary-400 whitespace-nowrap">{inquiry.id}</td>
                       <td className="p-4 font-medium text-neutral-900 dark:text-white max-w-[180px] truncate" title={inquiry.customerName}>{inquiry.customerName}</td>
                       <td className="p-4 text-neutral-600 dark:text-neutral-300 font-mono whitespace-nowrap">{inquiry.inquiryReference || inquiry.id.replace("INQ", "REF")}</td>
-                      <td className="p-4 text-neutral-600 dark:text-neutral-300 whitespace-nowrap">{inquiry.bagType || "U-Panel"}</td>
+                      <td className="p-4 text-neutral-600 dark:text-neutral-300 whitespace-nowrap">U-Panel</td>
                       <td className="p-4 text-neutral-600 dark:text-neutral-300 font-semibold">{inquiry.swl || '-'}</td>
                       <td className="p-4 text-neutral-600 dark:text-neutral-300 font-semibold">{inquiry.sf || '-'}</td>
                       <td className="p-4 text-right font-medium text-neutral-950 dark:text-neutral-100">{inquiry.quantity ? inquiry.quantity.toLocaleString() : '-'}</td>
@@ -820,7 +820,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
 
                   <div className="space-y-1 text-xs text-neutral-600 dark:text-neutral-400 mb-3">
                     <div><span className="text-neutral-400 font-medium">Reference:</span> {inquiry.inquiryReference || inquiry.id.replace("INQ", "REF")}</div>
-                    <div><span className="text-neutral-400 font-medium">Bag Type:</span> {inquiry.bagType || "U-Panel"}</div>
+                    <div><span className="text-neutral-400 font-medium">Bag Type:</span> U-Panel</div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 mb-3 text-xs bg-neutral-50 dark:bg-neutral-950 p-2 rounded-lg border border-neutral-100 dark:border-neutral-800">
