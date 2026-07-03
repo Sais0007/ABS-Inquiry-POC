@@ -16,16 +16,20 @@ import {
   CheckCircle,
   FileDown,
   Info,
-  Maximize
+  Maximize,
+  Minimize2
 } from "lucide-react";
 import { mockInquiries, Inquiry } from "../../mockAPI/inquiriesData";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
+import { FormModal, FormFooter } from "./hb/common/Form";
+import { SecondaryButton } from "./hb/listing";
 
 interface InquiryDetailsProps {
   inquiryId: string;
   onBack: () => void;
   onSelectInquiry: (id: string) => void;
+  initialMode?: "view" | "edit";
 }
 
 // Extracted fields structure matching the ABS POC categories (with expanded fields for the merged section and others)
@@ -125,9 +129,13 @@ interface ExtractedFieldsData {
   specialPackaging: string;
 }
 
-export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: InquiryDetailsProps) {
+export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry, initialMode = "view" }: InquiryDetailsProps) {
   const currentInquiry = mockInquiries.find(i => i.id === inquiryId) || mockInquiries[0];
   const currentIndex = mockInquiries.findIndex(i => i.id === currentInquiry.id);
+
+  const [isEditMode, setIsEditMode] = useState(initialMode === "edit");
+  const [isFieldsExpanded, setIsFieldsExpanded] = useState(false);
+  const [showDiscardPopup, setShowDiscardPopup] = useState(false);
 
   // PDF Viewer state
   const [pdfPage, setPdfPage] = useState(1);
@@ -232,43 +240,55 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
     const isAbs8 = currentInquiry.id === "INQ-2026-008";
 
     // Set initial field values
-    setFields(prev => ({
-      ...prev,
-      customerName: currentInquiry.customerName,
-      inquiryReference: currentInquiry.id.replace("INQ", "REF"),
-      safeWorkingLoad: isAbs1 ? "" : "1000", // Missing for INQ-001
-      swlUnit: "Kgs",
-      safetyFactor: isAbs3 ? "5:1" : "5:1", // Valid but review required for INQ-003
-      quantity: String(currentInquiry.quantity),
-      bagType: currentInquiry.productType.includes("Circular") ? "Circular" : currentInquiry.productType.includes("Baffle") ? "Baffle" : "U-Panel",
-      bagHeight: "1200",
-      bagWidth: "900",
-      gusset: (isAbs3 || isAbs8) ? "" : "900", // Missing for INQ-003 and INQ-008
-      conicalTop: false,
-      conicalBottom: currentInquiry.productType.includes("Conical") || currentInquiry.productType.includes("spout"),
-      topFlap: currentInquiry.productType.includes("filling skirt") || currentInquiry.productType.includes("Flap"),
-      bottomFlap: currentInquiry.productType.includes("discharge spout") || currentInquiry.productType.includes("Flap"),
-      fabricGsm: isAbs2 ? "" : currentInquiry.productType.includes("160") ? "160" : "180", // Missing for INQ-002
-      fabricType: currentInquiry.productType.includes("Laminated") ? "Laminated" : "Virgin Polypropylene",
-      fabricColor: currentInquiry.productType.includes("Blue") ? "Blue" : "White",
-      doubleLayer: currentInquiry.notes?.toLowerCase().includes("double layer") || false,
-      linerType: currentInquiry.notes?.toLowerCase().includes("liner") ? "LDPE Loose Fit" : "None",
-      hygiene: currentInquiry.notes?.toLowerCase().includes("food") ? "Food Grade" : "Industrial Grade",
-      loopType: currentInquiry.productType.includes("Cross Corner") ? "Cross Corner" : "Side Seam",
-      extraLoopOptions: currentInquiry.notes?.toLowerCase().includes("stevedore") ? ["Stevedore Strap"] : [],
-      fullLoop: false,
-      multifilamentLoop: currentInquiry.notes?.toLowerCase().includes("multifilament") || false,
-      patchUnderLoop: currentInquiry.notes?.toLowerCase().includes("patch") || true,
-      bandType: currentInquiry.notes?.toLowerCase().includes("reinforce") ? "Reinforced Band" : "None",
-      stitchingType: currentInquiry.productType.includes("Dust Proof") ? "Overlock with Dustproof" : "Standard Chain Stitch",
-      extraAccessories: currentInquiry.notes?.toLowerCase().includes("accessories") || false,
-      dustproofComponents: currentInquiry.productType.includes("Dust Proof") ? ["Filler Cord", "Felt Strip"] : [],
-      printingRequired: currentInquiry.notes?.toLowerCase().includes("print") || false,
-      printingSide: currentInquiry.notes?.toLowerCase().includes("print") ? "2 Sides" : "None",
-      printingColour: currentInquiry.notes?.toLowerCase().includes("print") ? "Black" : "None",
-      customerComments: isAbs2 ? "" : currentInquiry.notes || "", // Missing comments for INQ-002
-      documentPouch: true
-    }));
+    setFields(prev => {
+      let swlNum = "";
+      let swlUnitVal = "Kgs";
+      if (currentInquiry.swl) {
+        swlNum = currentInquiry.swl.replace(/[^\d]/g, '');
+        const unitMatch = currentInquiry.swl.match(/[a-zA-Z]+/);
+        if (unitMatch) swlUnitVal = unitMatch[0];
+      } else {
+        swlNum = isAbs1 ? "" : "1000";
+      }
+
+      return {
+        ...prev,
+        customerName: currentInquiry.customerName,
+        inquiryReference: currentInquiry.inquiryReference || currentInquiry.id.replace("INQ", "REF"),
+        safeWorkingLoad: swlNum,
+        swlUnit: swlUnitVal,
+        safetyFactor: currentInquiry.sf || "5:1",
+        quantity: String(currentInquiry.quantity),
+        bagType: currentInquiry.bagType || (currentInquiry.productType.includes("Circular") ? "Circular" : currentInquiry.productType.includes("Baffle") ? "Baffle" : "U-Panel"),
+        bagHeight: "1200",
+        bagWidth: "900",
+        gusset: (isAbs3 || isAbs8) ? "" : "900", // Missing for INQ-003 and INQ-008
+        conicalTop: false,
+        conicalBottom: currentInquiry.productType.includes("Conical") || currentInquiry.productType.includes("spout"),
+        topFlap: currentInquiry.productType.includes("filling skirt") || currentInquiry.productType.includes("Flap"),
+        bottomFlap: currentInquiry.productType.includes("discharge spout") || currentInquiry.productType.includes("Flap"),
+        fabricGsm: isAbs2 ? "" : currentInquiry.productType.includes("160") ? "160" : "180", // Missing for INQ-002
+        fabricType: currentInquiry.productType.includes("Laminated") ? "Laminated" : "Virgin Polypropylene",
+        fabricColor: currentInquiry.productType.includes("Blue") ? "Blue" : "White",
+        doubleLayer: currentInquiry.notes?.toLowerCase().includes("double layer") || false,
+        linerType: currentInquiry.notes?.toLowerCase().includes("liner") ? "LDPE Loose Fit" : "None",
+        hygiene: currentInquiry.notes?.toLowerCase().includes("food") ? "Food Grade" : "Industrial Grade",
+        loopType: currentInquiry.productType.includes("Cross Corner") ? "Cross Corner" : "Side Seam",
+        extraLoopOptions: currentInquiry.notes?.toLowerCase().includes("stevedore") ? ["Stevedore Strap"] : [],
+        fullLoop: false,
+        multifilamentLoop: currentInquiry.notes?.toLowerCase().includes("multifilament") || false,
+        patchUnderLoop: currentInquiry.notes?.toLowerCase().includes("patch") || true,
+        bandType: currentInquiry.notes?.toLowerCase().includes("reinforce") ? "Reinforced Band" : "None",
+        stitchingType: currentInquiry.productType.includes("Dust Proof") ? "Overlock with Dustproof" : "Standard Chain Stitch",
+        extraAccessories: currentInquiry.notes?.toLowerCase().includes("accessories") || false,
+        dustproofComponents: currentInquiry.productType.includes("Dust Proof") ? ["Filler Cord", "Felt Strip"] : [],
+        printingRequired: currentInquiry.notes?.toLowerCase().includes("print") || false,
+        printingSide: currentInquiry.notes?.toLowerCase().includes("print") ? "2 Sides" : "None",
+        printingColour: currentInquiry.notes?.toLowerCase().includes("print") ? "Black" : "None",
+        customerComments: isAbs2 ? "" : currentInquiry.notes || "", // Missing comments for INQ-002
+        documentPouch: true
+      };
+    });
 
     // Setup review required fields (orange borders)
     const reviews: Record<string, boolean> = {};
@@ -387,12 +407,12 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
         type: "success", 
         borderClass: "border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-900/30", 
         badgeClass: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50",
-        badgeText: "All Good"
+    badgeText: "All Good"
       };
     }
   };
 
-  const handleExportCSV = () => {
+  const triggerExportCSV = () => {
     // Check if there are any missing fields
     const missingKeys = Object.keys(fields).filter(k => 
       isFieldMissing(k as keyof ExtractedFieldsData, fields[k as keyof ExtractedFieldsData])
@@ -409,7 +429,7 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
           break;
         }
       }
-      return;
+      return false;
     }
 
     // Generate CSV
@@ -436,52 +456,60 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
       mockInquiries[index].processingStatus = 'Exported';
       mockInquiries[index].exportedOn = new Date().toISOString();
       mockInquiries[index].status = 'approved';
+      mockInquiries[index].updatedOn = new Date().toISOString();
     }
 
     toast.success("CSV file exported successfully!");
-  };
-
-  const handleSaveDraft = () => {
-    const index = mockInquiries.findIndex(i => i.id === currentInquiry.id);
-    if (index !== -1) {
-      mockInquiries[index].notes = fields.customerComments;
-      if (fields.quantity) {
-        const qty = parseInt(fields.quantity, 10);
-        if (!isNaN(qty)) {
-          mockInquiries[index].quantity = qty;
-        }
-      }
-    }
-    toast.success("Draft saved successfully!");
+    return true;
   };
 
   const handleSaveChanges = () => {
-    const missingKeys = Object.keys(fields).filter(k => 
-      isFieldMissing(k as keyof ExtractedFieldsData, fields[k as keyof ExtractedFieldsData])
-    );
-
     const index = mockInquiries.findIndex(i => i.id === currentInquiry.id);
     if (index !== -1) {
-      mockInquiries[index].notes = fields.customerComments;
-      if (fields.quantity) {
-        const qty = parseInt(fields.quantity, 10);
-        if (!isNaN(qty)) {
-          mockInquiries[index].quantity = qty;
-        }
+      mockInquiries[index].customerName = fields.customerName;
+      mockInquiries[index].inquiryReference = fields.inquiryReference;
+      mockInquiries[index].bagType = fields.bagType;
+      mockInquiries[index].swl = fields.safeWorkingLoad + " " + fields.swlUnit;
+      mockInquiries[index].sf = fields.safetyFactor;
+      
+      const qty = parseInt(fields.quantity, 10);
+      if (!isNaN(qty)) {
+        mockInquiries[index].quantity = qty;
       }
-      if (missingKeys.length === 0) {
-        if (mockInquiries[index].status === "pending") {
-          mockInquiries[index].status = "under-review";
-        }
+      mockInquiries[index].notes = fields.customerComments;
+      mockInquiries[index].updatedOn = new Date().toISOString();
+      
+      if (mockInquiries[index].status === "pending") {
+        mockInquiries[index].status = "under-review";
       }
     }
 
-    if (missingKeys.length > 0) {
-      toast.warning(`Changes saved with ${missingKeys.length} unresolved issue(s).`);
-    } else {
-      toast.success("Changes saved successfully!");
-    }
+    toast.success("Changes saved successfully!");
     onBack();
+  };
+
+  const handleSaveAndExport = () => {
+    // Save first
+    const index = mockInquiries.findIndex(i => i.id === currentInquiry.id);
+    if (index !== -1) {
+      mockInquiries[index].customerName = fields.customerName;
+      mockInquiries[index].inquiryReference = fields.inquiryReference;
+      mockInquiries[index].bagType = fields.bagType;
+      mockInquiries[index].swl = fields.safeWorkingLoad + " " + fields.swlUnit;
+      mockInquiries[index].sf = fields.safetyFactor;
+      
+      const qty = parseInt(fields.quantity, 10);
+      if (!isNaN(qty)) {
+        mockInquiries[index].quantity = qty;
+      }
+      mockInquiries[index].notes = fields.customerComments;
+      mockInquiries[index].updatedOn = new Date().toISOString();
+    }
+
+    const success = triggerExportCSV();
+    if (success) {
+      onBack();
+    }
   };
 
   // Custom Input with border-embedded floating label
@@ -527,7 +555,8 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className={`peer w-full h-11 px-3 pt-4 pb-1 text-sm rounded-lg border transition-all outline-none ${borderStyle} ${bgStyle}`}
+          disabled={!isEditMode}
+          className={`peer w-full h-11 px-3 pt-4 pb-1 text-sm rounded-lg border transition-all outline-none ${borderStyle} ${bgStyle} disabled:opacity-75 disabled:bg-neutral-50 dark:disabled:bg-neutral-900/50`}
         />
         <label
           htmlFor={id}
@@ -582,7 +611,8 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`peer w-full h-11 px-3 pt-4 pb-1 text-sm border rounded-lg transition-all outline-none appearance-none cursor-pointer ${borderStyle} ${bgStyle}`}
+          disabled={!isEditMode}
+          className={`peer w-full h-11 px-3 pt-4 pb-1 text-sm border rounded-lg transition-all outline-none appearance-none cursor-pointer ${borderStyle} ${bgStyle} disabled:opacity-75 disabled:bg-neutral-50 dark:disabled:bg-neutral-900/50`}
         >
           {options.map(o => (
             <option key={o} value={o}>{o}</option>
@@ -620,8 +650,9 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
         <span className="text-xs text-neutral-600 dark:text-neutral-400 font-medium">{label}</span>
         <button
           type="button"
-          onClick={() => onChange(!checked)}
-          className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors focus:outline-none ${
+          onClick={() => { if (isEditMode) onChange(!checked); }}
+          disabled={!isEditMode}
+          className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors focus:outline-none disabled:opacity-60 ${
             checked ? "bg-primary-500" : "bg-neutral-300 dark:bg-neutral-700"
           }`}
         >
@@ -674,17 +705,19 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
     return (
       <div className="relative mt-2" ref={containerRef}>
         <div 
-          onClick={() => setIsOpen(!isOpen)}
-          className="peer w-full min-h-11 px-3 pt-4 pb-1 text-sm bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white transition-all cursor-pointer flex flex-wrap gap-1.5 items-center pr-8"
+          onClick={() => { if (isEditMode) setIsOpen(!isOpen); }}
+          className={`peer w-full min-h-11 px-3 pt-4 pb-1 text-sm bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-neutral-900 dark:text-white transition-all flex flex-wrap gap-1.5 items-center pr-8 ${isEditMode ? 'cursor-pointer' : 'cursor-default opacity-75 bg-neutral-50 dark:bg-neutral-900/50'}`}
         >
           {selectedValues.length > 0 && !selectedValues.includes("None") ? (
             selectedValues.map(v => (
               <span key={v} className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-50 dark:bg-primary-950 border border-primary-100 dark:border-primary-900 text-primary-700 dark:text-primary-400 text-[10px] font-medium rounded">
                 {v}
-                <X 
-                  className="w-2.5 h-2.5 cursor-pointer hover:text-primary-900" 
-                  onClick={(e) => { e.stopPropagation(); toggleSelect(v); }} 
-                />
+                {isEditMode && (
+                  <X 
+                    className="w-2.5 h-2.5 cursor-pointer hover:text-primary-900" 
+                    onClick={(e) => { e.stopPropagation(); toggleSelect(v); }} 
+                  />
+                )}
               </span>
             ))
           ) : (
@@ -779,9 +812,9 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
         <div className="flex items-center gap-4">
           <div>
             <nav className="flex items-center gap-1 text-[10px] text-neutral-400 dark:text-neutral-500 mb-0.5">
-              <button onClick={onBack} className="hover:underline">Home</button>
+              <button onClick={() => { if (isEditMode) setShowDiscardPopup(true); else onBack(); }} className="hover:underline">Home</button>
               <span>&gt;</span>
-              <button onClick={onBack} className="hover:underline">Inquiry Listing</button>
+              <button onClick={() => { if (isEditMode) setShowDiscardPopup(true); else onBack(); }} className="hover:underline">Inquiry Listing</button>
               <span>&gt;</span>
               <span className="text-neutral-500 font-medium">Inquiry Details</span>
             </nav>
@@ -790,94 +823,26 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
               <span className="font-mono text-xs text-neutral-500 bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-850 px-2 py-0.5 rounded font-normal">
                 {currentInquiry.id}
               </span>
-              
-              {/* Compact Badges sitting directly next to Inquiry ID */}
-              <div className="flex items-center gap-1.5 ml-2">
-                {currentInquiry.extraction === 'complete' && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-250 dark:border-emerald-900/50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                    <span>Extraction: Completed</span>
-                  </span>
-                )}
-                {currentInquiry.extraction === 'partial' && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-255 dark:border-amber-900/50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
-                    <span>Extraction: Partial</span>
-                  </span>
-                )}
-                {currentInquiry.extraction === 'failed' && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-rose-700 dark:text-rose-450 bg-rose-50 dark:bg-rose-950/20 border-rose-250 dark:border-rose-800/50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
-                    <span>Extraction: Failed</span>
-                  </span>
-                )}
-                {(!currentInquiry.extraction || currentInquiry.extraction === 'processing') && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                    <div className="w-1.5 h-1.5 rounded-full bg-neutral-400 animate-pulse"></div>
-                    <span>Extraction: Processing</span>
-                  </span>
-                )}
-
-                {currentInquiry.validation === 'valid' && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-250 dark:border-emerald-900/50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                    <span>Validation: Valid</span>
-                  </span>
-                )}
-                {currentInquiry.validation === 'review-required' && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-255 dark:border-amber-900/50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500"></div>
-                    <span>Validation: Review Required</span>
-                  </span>
-                )}
-                {currentInquiry.validation === 'missing' && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-rose-700 dark:text-rose-455 bg-rose-50 dark:bg-rose-950/20 border-rose-250 dark:border-rose-800/50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
-                    <span>Validation: Missing</span>
-                  </span>
-                )}
-                {(!currentInquiry.validation || currentInquiry.validation === 'pending') && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                    <div className="w-1.5 h-1.5 rounded-full bg-neutral-400"></div>
-                    <span>Validation: Pending</span>
-                  </span>
-                )}
-
-                {currentInquiry.processingStatus === 'Exported' ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-250 dark:border-emerald-900/50">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                    <span>CSV: Exported</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
-                    <div className="w-1.5 h-1.5 rounded-full bg-neutral-400"></div>
-                    <span>CSV: Not Exported</span>
-                  </span>
-                )}
-              </div>
             </h1>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
           <button
-            onClick={handlePrevious}
-            disabled={currentIndex === 0}
-            className="px-3 py-1.5 text-xs font-semibold border border-neutral-200 dark:border-neutral-850 rounded-lg bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50 text-neutral-600 dark:text-neutral-300 transition-colors flex items-center gap-1"
+            onClick={() => {
+              if (isEditMode) {
+                setShowDiscardPopup(true);
+              } else {
+                onBack();
+              }
+            }}
+            className="px-3 py-1.5 text-xs font-semibold border border-neutral-200 dark:border-neutral-850 rounded-lg bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 transition-colors flex items-center gap-1"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
-            <span>Previous</span>
-          </button>
-          <button
-            onClick={handleNext}
-            disabled={currentIndex === mockInquiries.length - 1}
-            className="px-3 py-1.5 text-xs font-semibold border border-neutral-200 dark:border-neutral-850 rounded-lg bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50 text-neutral-600 dark:text-neutral-300 transition-colors flex items-center gap-1"
-          >
-            <span>Next</span>
-            <ChevronRight className="w-3.5 h-3.5" />
+            <span>Back</span>
           </button>
           <Button
-            onClick={handleExportCSV}
+            onClick={triggerExportCSV}
             className="text-xs px-3 h-8.5 flex items-center gap-1"
           >
             <FileDown className="w-4 h-4" />
@@ -889,10 +854,16 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
       {/* DUAL WORKSPACE PANEL - LETS USER DO SIDE-BY-SIDE REVIEW WITH VIEWPORT LOMITING */}
       <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0 overflow-hidden">
         
-        {/* LEFT PANEL - FIXED PDF VIEWER (45% Width on Desktop) */}
-        <div className="w-full lg:w-[45%] h-full flex flex-col bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xs overflow-hidden shrink-0">
+        {/* LEFT PANEL - FIXED PDF VIEWER (45% Width on Desktop or collapsed to 0) */}
+        <div 
+          className={`h-full flex flex-col bg-white dark:bg-neutral-900 border rounded-xl shadow-xs overflow-hidden shrink-0 transition-all duration-300 ease-in-out ${
+            isFieldsExpanded 
+              ? 'w-0 lg:w-0 opacity-0 pointer-events-none border-none p-0' 
+              : 'w-full lg:w-[45%] border-neutral-200 dark:border-neutral-800'
+          }`}
+        >
           {/* PDF Viewer Toolbar (Controls always visible) */}
-          <div className="p-2 border-b border-neutral-200 dark:border-neutral-850 flex items-center justify-between gap-3 bg-white dark:bg-neutral-900 shrink-0 select-none">
+          <div className="p-2 border-b border-neutral-200 dark:border-neutral-855 flex items-center justify-between gap-3 bg-white dark:bg-neutral-900 shrink-0 select-none">
             {/* PDF File Name (replaced Page Navigation) */}
             <div className="flex items-center gap-2 min-w-0">
               <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 select-none">PDF</span>
@@ -913,13 +884,13 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
               <span className="w-10 text-center font-mono font-medium text-[11px]">{pdfZoom}%</span>
               <button 
                 onClick={() => setPdfZoom(prev => Math.min(200, prev + 10))}
-                className="p-1 border border-neutral-200/40 dark:border-neutral-850 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="p-1 border border-neutral-200/40 dark:border-neutral-855 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 <ZoomIn className="w-3.5 h-3.5" />
               </button>
             </div>
  
-            {/* Download & Print Controls */}
+            {/* Download, Print & Expand Controls */}
             <div className="flex items-center gap-1">
               <button 
                 onClick={() => toast.info("Downloading file...")}
@@ -934,6 +905,13 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
                 title="Print PDF"
               >
                 <Printer className="w-3.5 h-3.5" />
+              </button>
+              <button 
+                onClick={() => setIsFieldsExpanded(!isFieldsExpanded)}
+                className="p-1.5 border border-neutral-200/40 dark:border-neutral-850 rounded text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-700 dark:hover:text-white transition-colors"
+                title={isFieldsExpanded ? "Show PDF" : "Expand Fields"}
+              >
+                {isFieldsExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>
@@ -1107,18 +1085,36 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
             </div>
           </div>
         </div>
-
+ 
         {/* RIGHT PANEL - EXTRACTED FIELDS (55% Width, Scrollable independently, Sticky footer) */}
-        <div className="w-full lg:w-[55%] h-full flex flex-col bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xs overflow-hidden shrink-0">
+        <div 
+          className={`h-full flex flex-col bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xs overflow-hidden shrink-0 transition-all duration-300 ease-in-out ${
+            isFieldsExpanded 
+              ? 'w-full lg:w-full' 
+              : 'w-full lg:w-[55%]'
+          }`}
+        >
           {/* Header Title */}
           <div className="p-3.5 bg-neutral-50 dark:bg-neutral-950 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between shrink-0 select-none">
-            <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">Extracted Fields</span>
+            <div className="flex items-center gap-2">
+              {isFieldsExpanded && (
+                <button 
+                  onClick={() => setIsFieldsExpanded(false)}
+                  className="p-1 border border-neutral-200 dark:border-neutral-800 rounded text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors mr-2 flex items-center gap-1.5"
+                  title="Show PDF"
+                >
+                  <Minimize2 className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-semibold">Show PDF</span>
+                </button>
+              )}
+              <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">Extracted Fields</span>
+            </div>
             <span className="text-[10px] text-neutral-400 font-medium flex items-center gap-1">
               <span>All fields with issues are highlighted</span>
               <Info className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500" />
             </span>
           </div>
-
+ 
           {/* Scrollable Accordions list */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin">
             
@@ -1782,31 +1778,70 @@ export default function InquiryDetails({ inquiryId, onBack, onSelectInquiry }: I
 
           {/* STICKY ACTION FOOTER */}
           <div className="p-4 bg-neutral-50 dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800 flex flex-wrap items-center justify-end gap-2 shrink-0 select-none">
-            <button
-              type="button"
-              onClick={onBack}
-              className="px-4 py-2 text-xs font-semibold border border-neutral-200 dark:border-neutral-850 rounded-lg bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              className="px-4 py-2 text-xs font-semibold border border-neutral-200 dark:border-neutral-850 rounded-lg bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all"
-            >
-              Save Draft
-            </button>
-            <button
-              type="button"
-              onClick={handleSaveChanges}
-              className="px-4 py-2 text-xs font-semibold border border-primary-500/35 rounded-lg bg-white dark:bg-neutral-900 hover:bg-primary-50/50 dark:hover:bg-primary-950/20 text-primary transition-all"
-            >
-              Save Changes
-            </button>
+            {!isEditMode ? (
+              <button
+                type="button"
+                onClick={() => setIsEditMode(true)}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-primary-600 hover:bg-primary-750 text-white transition-all"
+              >
+                Edit Inquiry
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowDiscardPopup(true)}
+                  className="px-4 py-2 text-xs font-semibold border border-neutral-200 dark:border-neutral-850 rounded-lg bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all"
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveChanges}
+                  className="px-4 py-2 text-xs font-semibold border border-neutral-200 dark:border-neutral-850 rounded-lg bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 transition-all"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAndExport}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-primary-600 hover:bg-primary-750 text-white transition-all"
+                >
+                  Save & Export
+                </button>
+              </>
+            )}
           </div>
         </div>
 
       </div>
+
+      <FormModal
+        isOpen={showDiscardPopup}
+        onClose={() => setShowDiscardPopup(false)}
+        title="Discard Changes"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4 select-none">
+          <p className="text-sm text-neutral-600 dark:text-neutral-400">
+            You have unsaved changes. If you proceed without saving, this inquiry will be discarded and your changes will be lost.
+          </p>
+          <FormFooter className="pt-2 border-t border-neutral-100 dark:border-neutral-850">
+            <SecondaryButton onClick={() => setShowDiscardPopup(false)}>
+              Cancel
+            </SecondaryButton>
+            <Button 
+              onClick={() => {
+                setShowDiscardPopup(false);
+                onBack();
+              }}
+              className="bg-red-600 hover:bg-red-750 text-white border-transparent"
+            >
+              Discard
+            </Button>
+          </FormFooter>
+        </div>
+      </FormModal>
     </div>
   );
 }

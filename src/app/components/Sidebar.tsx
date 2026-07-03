@@ -352,52 +352,8 @@ export function Sidebar({
                 </div>
               </div>
 
-              {/* Menu Items */}
-              <div className="p-1">
-                <button
-                  onClick={() => {
-                    setShowProfileDrawer(false);
-                    // Handle profile click
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded transition-colors flex items-center gap-2"
-                >
-                  <User className="w-4 h-4" />
-                  <span>My Profile</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setShowProfileDrawer(false);
-                    setShowChangePasswordModal(true);
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded transition-colors flex items-center gap-2"
-                >
-                  <Key className="w-4 h-4" />
-                  <span>Change Password</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setShowProfileDrawer(false);
-                    // Handle settings click
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded transition-colors flex items-center gap-2"
-                >
-                  <Settings className="w-4 h-4" />
-                  <span>Settings</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setShowProfileDrawer(false);
-                    // Handle help click
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900 rounded transition-colors flex items-center gap-2"
-                >
-                  <HelpCircle className="w-4 h-4" />
-                  <span>Help & Support</span>
-                </button>
-              </div>
-
               {/* Logout */}
-              <div className="p-1 border-t border-neutral-200 dark:border-neutral-800">
+              <div className="p-1">
                 <button
                   onClick={() => {
                     setShowProfileDrawer(false);
@@ -546,15 +502,6 @@ export function Sidebar({
                 <div className="text-sm font-medium text-neutral-900 dark:text-white">{currentUser?.name || 'John Doe'}</div>
                 <div className="text-xs text-neutral-500 dark:text-neutral-400">{currentUser?.email || 'john.doe@company.com'}</div>
               </div>
-              <button 
-                onClick={() => { setHoveredFlyout(null); setShowProfileDrawer(true); }}
-                className="w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900"
-              >
-                My Profile
-              </button>
-              <button className="w-full text-left px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-900">
-                Settings
-              </button>
               <button 
                 onClick={() => { setHoveredFlyout(null); if(onLogout) onLogout(); }}
                 className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"

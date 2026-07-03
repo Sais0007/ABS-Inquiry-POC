@@ -61,12 +61,7 @@ export default function LoginScreen({ onLoginSuccess, logoUrl }: LoginScreenProp
 
   return (
     <div 
-      className="min-h-screen w-full flex items-center justify-center p-4 transition-colors duration-300"
-      style={{
-        backgroundImage: `linear-gradient(to bottom, rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.9)), url(${bulkSacksBg})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
+      className="min-h-screen w-full flex items-center justify-center p-4 bg-neutral-50 dark:bg-neutral-950 transition-colors duration-300"
     >
       <div className="w-full max-w-md bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xl p-8 space-y-6">
         {/* Header Branding */}
@@ -145,17 +140,6 @@ export default function LoginScreen({ onLoginSuccess, logoUrl }: LoginScreenProp
                 Remember Me
               </label>
             </div>
-            
-            <a
-              href="#forgot-password"
-              className="text-xs text-primary hover:underline transition-colors"
-              onClick={(e) => {
-                e.preventDefault();
-                alert("For this POC, please use the provided demo credentials.");
-              }}
-            >
-              Forgot Password?
-            </a>
           </div>
 
           {/* Submit Button */}

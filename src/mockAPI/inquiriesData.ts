@@ -14,8 +14,11 @@ export interface Inquiry {
   sf?: string;
   exportedOn?: string;
   extraction?: 'complete' | 'partial' | 'failed' | 'processing';
-  validation?: 'valid' | 'review-required' | 'missing' | 'pending';
-  processingStatus: 'Uploading' | 'Processing' | 'Ready for Review' | 'Exported' | 'Failed';
+  validation?: 'valid' | 'review' | 'missing' | 'pending';
+  processingStatus: 'Uploading' | 'Processing' | 'In Review' | 'Exported' | 'Failed' | 'Draft';
+  inquiryReference?: string;
+  bagType?: string;
+  updatedOn?: string;
 }
 
 export const mockInquiries: Inquiry[] = [
@@ -33,8 +36,11 @@ export const mockInquiries: Inquiry[] = [
     swl: '',
     sf: '5:1',
     extraction: 'complete',
-    validation: 'review-required',
-    processingStatus: 'Ready for Review'
+    validation: 'review',
+    processingStatus: 'In Review',
+    inquiryReference: 'REF-2026-001',
+    bagType: 'U-Panel',
+    updatedOn: '2026-06-20T10:00:00Z'
   },
   {
     id: 'INQ-2026-002',
@@ -51,7 +57,10 @@ export const mockInquiries: Inquiry[] = [
     sf: '5:1',
     extraction: 'complete',
     validation: 'pending',
-    processingStatus: 'Ready for Review'
+    processingStatus: 'In Review',
+    inquiryReference: 'REF-2026-002',
+    bagType: 'Circular',
+    updatedOn: '2026-06-21T14:30:00Z'
   },
   {
     id: 'INQ-2026-003',
@@ -69,7 +78,10 @@ export const mockInquiries: Inquiry[] = [
     exportedOn: '2026-06-22T14:05:00Z',
     extraction: 'complete',
     validation: 'valid',
-    processingStatus: 'Exported'
+    processingStatus: 'Exported',
+    inquiryReference: 'REF-2026-003',
+    bagType: 'Baffle',
+    updatedOn: '2026-06-22T14:05:00Z'
   },
   {
     id: 'INQ-2026-004',
@@ -87,7 +99,10 @@ export const mockInquiries: Inquiry[] = [
     exportedOn: '2026-06-23T16:30:00Z',
     extraction: 'complete',
     validation: 'valid',
-    processingStatus: 'Exported'
+    processingStatus: 'Exported',
+    inquiryReference: 'REF-2026-004',
+    bagType: 'Single Loop',
+    updatedOn: '2026-06-23T16:30:00Z'
   },
   {
     id: 'INQ-2026-005',
@@ -104,7 +119,10 @@ export const mockInquiries: Inquiry[] = [
     sf: '',
     extraction: 'failed',
     validation: 'missing',
-    processingStatus: 'Failed'
+    processingStatus: 'Failed',
+    inquiryReference: 'REF-2026-005',
+    bagType: 'Four-Loop',
+    updatedOn: '2026-06-24T16:20:00Z'
   },
   {
     id: 'INQ-2026-006',
@@ -120,8 +138,11 @@ export const mockInquiries: Inquiry[] = [
     swl: '1000 KG',
     sf: '5:1',
     extraction: 'partial',
-    validation: 'review-required',
-    processingStatus: 'Ready for Review'
+    validation: 'review',
+    processingStatus: 'In Review',
+    inquiryReference: 'REF-2026-006',
+    bagType: 'Two-Loop',
+    updatedOn: '2026-06-25T08:30:00Z'
   },
   {
     id: 'INQ-2026-007',
@@ -139,7 +160,10 @@ export const mockInquiries: Inquiry[] = [
     exportedOn: '2026-06-25T15:20:00Z',
     extraction: 'complete',
     validation: 'valid',
-    processingStatus: 'Exported'
+    processingStatus: 'Exported',
+    inquiryReference: 'REF-2026-007',
+    bagType: 'U-Panel',
+    updatedOn: '2026-06-25T15:20:00Z'
   },
   {
     id: 'INQ-2026-008',
@@ -156,6 +180,9 @@ export const mockInquiries: Inquiry[] = [
     sf: '5:1',
     extraction: 'complete',
     validation: 'valid',
-    processingStatus: 'Ready for Review'
+    processingStatus: 'In Review',
+    inquiryReference: 'REF-2026-008',
+    bagType: 'Baffle',
+    updatedOn: '2026-06-26T10:05:00Z'
   }
 ];

@@ -20,14 +20,17 @@ import {
   Pagination, 
   PrimaryButton, 
   SummaryWidgets,
-  SearchBar
+  SearchBar,
+  SecondaryButton
 } from './hb/listing';
 import { mockInquiries, Inquiry } from '../../mockAPI/inquiriesData';
 import { toast } from 'sonner';
 import UploadInquiryModal from './UploadInquiryModal';
+import { FormModal, FormFooter } from './hb/common/Form';
 
-export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (id: string) => void }) {
+export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (id: string, mode?: 'view' | 'edit') => void }) {
   const [inquiries, setInquiries] = useState<Inquiry[]>(mockInquiries);
+  const [inquiryToDelete, setInquiryToDelete] = useState<Inquiry | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [extractionFilter, setExtractionFilter] = useState<string>('all');
   const [validationFilter, setValidationFilter] = useState<string>('all');
@@ -89,36 +92,73 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
   };
 
   const handleUploadSuccess = (fileNames: string[]) => {
-    const newInquiries: Inquiry[] = [];
-    let currentList = [...inquiries];
+    if (fileNames.length === 0) return;
+    const fileName = fileNames[0];
+    const nextId = generateNextInquiryId(inquiries);
+    const customerName = cleanCustomerName(fileName);
+    
+    const newInq: Inquiry = {
+      id: nextId,
+      customerName,
+      email: `info@${customerName.toLowerCase().replace(/\s+/g, '')}.com`,
+      phone: `+91 22 ${Math.floor(40000000 + Math.random() * 59000000)}`,
+      productType: "FIBC U-Panel Bag (Type C Conductive)",
+      quantity: Math.floor(Math.random() * 4 + 1) * 5000,
+      requestDate: new Date().toISOString(),
+      priority: "medium",
+      status: "under-review",
+      processingStatus: "In Review",
+      extraction: "complete",
+      validation: "review",
+      swl: "1000 KG",
+      sf: "5:1",
+      inquiryReference: nextId.replace("INQ", "REF"),
+      bagType: "U-Panel",
+      updatedOn: new Date().toISOString()
+    };
 
-    fileNames.forEach(fileName => {
-      const nextId = generateNextInquiryId([...currentList, ...newInquiries]);
-      const customerName = cleanCustomerName(fileName);
-      
-      const newInq: Inquiry = {
-        id: nextId,
-        customerName,
-        email: `info@${customerName.toLowerCase().replace(/\s+/g, '')}.com`,
-        phone: `+91 22 ${Math.floor(40000000 + Math.random() * 59000000)}`,
-        productType: "FIBC U-Panel Bag (Type C Conductive)",
-        quantity: Math.floor(Math.random() * 4 + 1) * 5000,
-        requestDate: new Date().toISOString(),
-        priority: "medium",
-        status: "processing",
-        processingStatus: "Uploading",
-        extraction: "processing",
-        validation: "pending",
-        swl: "",
-        sf: ""
-      };
+    setInquiries(prev => [newInq, ...prev]);
+    mockInquiries.unshift(newInq);
+    
+    onSelectInquiry(newInq.id, 'edit');
+    toast.success(`Inquiry uploaded successfully. Redirecting for review...`);
+  };
 
-      newInquiries.push(newInq);
-    });
+  const handleExportSingle = (i: Inquiry) => {
+    const headers = ['Inquiry Ref No.', 'Customer Name', 'SWL', 'SF', 'Qty', 'Uploaded On', 'Exported On', 'Extraction', 'Validation', 'Status'].join(',');
+    const row = [
+      i.id,
+      `"${i.customerName}"`,
+      i.swl || '-',
+      i.sf || '-',
+      i.quantity,
+      formatDateTime(i.requestDate),
+      i.exportedOn ? formatDateTime(i.exportedOn) : '-',
+      i.extraction || '',
+      i.validation || '',
+      i.processingStatus
+    ].join(',');
+    const csvContent = [headers, row].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `inquiry_${i.id}_export.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Successfully exported inquiry ${i.id}.`);
+  };
 
-    setInquiries(prev => [...newInquiries, ...prev]);
-    mockInquiries.unshift(...newInquiries);
-    toast.success(`${fileNames.length} inquiries uploaded successfully. AI extraction has started.`);
+  const handleDeleteConfirm = () => {
+    if (!inquiryToDelete) return;
+    setInquiries(prev => prev.filter(i => i.id !== inquiryToDelete.id));
+    const mockIndex = mockInquiries.findIndex(mi => mi.id === inquiryToDelete.id);
+    if (mockIndex !== -1) {
+      mockInquiries.splice(mockIndex, 1);
+    }
+    toast.success(`Inquiry ${inquiryToDelete.id} deleted successfully.`);
+    setInquiryToDelete(null);
   };
 
   // Background simulation pipeline updates
@@ -161,13 +201,13 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
                 return {
                   ...inq,
                   processingStep: nextStep,
-                  validation: 'review-required' as const
+                  validation: 'review' as const
                 };
               } else if (nextStep === 'Completed') {
                 return {
                   ...inq,
                   status: 'under-review' as const,
-                  processingStatus: 'Ready for Review' as const,
+                  processingStatus: 'In Review' as const,
                   processingStep: undefined
                 };
               } else {
@@ -241,6 +281,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
 
       const matchesProcessing = 
         processingFilter === 'all' || 
+        (processingFilter === 'Processing' && (item.processingStatus === 'Processing' || item.processingStatus === 'Uploading')) ||
         item.processingStatus === processingFilter;
 
       let matchesUploaded = true;
@@ -308,7 +349,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
     }
 
     if (format === 'excel') {
-      const headers = ['Inquiry Ref No.', 'Customer Name', 'SWL', 'SF', 'Qty', 'Uploaded On', 'Exported On', 'Extraction', 'Validation', 'Processing Status'].join(',');
+      const headers = ['Inquiry Ref No.', 'Customer Name', 'SWL', 'SF', 'Qty', 'Uploaded On', 'Exported On', 'Extraction', 'Validation', 'Status'].join(',');
       const rows = dataToExport.map(i => [
         i.id,
         `"${i.customerName}"`,
@@ -336,7 +377,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
     } else {
       let report = `ABS INQUIRY REPORT - Generated on ${new Date().toLocaleString()}\n`;
       report += `Total Records: ${dataToExport.length}\n\n`;
-      report += `${'Ref No.'.padEnd(15)}${'Customer Name'.padEnd(30)}${'SWL'.padEnd(10)}${'SF'.padEnd(10)}${'Qty'.padEnd(10)}${'Processing Status'}\n`;
+      report += `${'Ref No.'.padEnd(15)}${'Customer Name'.padEnd(30)}${'SWL'.padEnd(10)}${'SF'.padEnd(10)}${'Qty'.padEnd(10)}${'Status'}\n`;
       report += '='.repeat(90) + '\n';
       
       dataToExport.forEach(i => {
@@ -379,13 +420,13 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
   const getExtractionBadge = (status?: string) => {
     const badgeConfig: Record<string, { label: string, colorClass: string, dotColor: string }> = {
       complete: { label: 'Complete', colorClass: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-250 dark:border-emerald-900/50', dotColor: 'bg-emerald-500' },
-      partial: { label: 'Partial', colorClass: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-250 dark:border-amber-900/50', dotColor: 'bg-amber-500' },
-      failed: { label: 'Failed', colorClass: 'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/20 border-rose-250 dark:border-rose-800/50', dotColor: 'bg-rose-500' },
+      partial: { label: 'Partial', colorClass: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-255 dark:border-amber-900/50', dotColor: 'bg-amber-500' },
+      failed: { label: 'Failed', colorClass: 'text-rose-700 dark:text-rose-455 bg-rose-50 dark:bg-rose-950/20 border-rose-250 dark:border-rose-800/50', dotColor: 'bg-rose-500' },
       processing: { label: 'Processing', colorClass: 'text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800', dotColor: 'bg-neutral-400' }
     };
     const config = badgeConfig[status || ''] || badgeConfig.processing;
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold ${config.colorClass}`}>
+      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 border rounded-full text-xs font-semibold ${config.colorClass}`}>
         <div className={`w-1.5 h-1.5 rounded-full ${config.dotColor}`}></div>
         <span>{config.label}</span>
       </span>
@@ -395,13 +436,13 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
   const getValidationBadge = (status?: string) => {
     const badgeConfig: Record<string, { label: string, colorClass: string, dotColor: string }> = {
       valid: { label: 'Valid', colorClass: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-250 dark:border-emerald-900/50', dotColor: 'bg-emerald-500' },
-      'review-required': { label: 'Review Required', colorClass: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-250 dark:border-amber-900/50', dotColor: 'bg-amber-500' },
-      missing: { label: 'Missing', colorClass: 'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/50', dotColor: 'bg-rose-500' },
+      review: { label: 'Review', colorClass: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border-amber-250 dark:border-amber-900/50', dotColor: 'bg-amber-500' },
+      missing: { label: 'Missing', colorClass: 'text-rose-700 dark:text-rose-450 bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/50', dotColor: 'bg-rose-500' },
       pending: { label: 'Pending', colorClass: 'text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800', dotColor: 'bg-neutral-400' }
     };
     const config = badgeConfig[status || ''] || badgeConfig.pending;
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full text-xs font-semibold ${config.colorClass}`}>
+      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 border rounded-full text-xs font-semibold ${config.colorClass}`}>
         <div className={`w-1.5 h-1.5 rounded-full ${config.dotColor}`}></div>
         <span>{config.label}</span>
       </span>
@@ -411,23 +452,24 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
   const getProcessingStatusBadge = (pStatus: string) => {
     if (pStatus === 'Uploading' || pStatus === 'Processing') {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 border rounded-full bg-amber-50/40 dark:bg-amber-950/10 border-amber-255 dark:border-amber-900/40 text-amber-700 dark:text-amber-400 text-xs font-semibold">
-          <RefreshCw className="w-3 h-3 animate-spin text-amber-500 shrink-0" />
-          <span>{pStatus}</span>
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 border rounded-full bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50 text-blue-700 dark:text-blue-400 text-xs font-semibold">
+          <RefreshCw className="w-3 h-3 animate-spin text-blue-500 shrink-0" />
+          <span>Processing</span>
         </span>
       );
     }
     
     const configs: Record<string, { bg: string, text: string, label: string }> = {
-      'Ready for Review': { bg: 'bg-indigo-50 dark:bg-indigo-950/20 border-indigo-250 dark:border-indigo-900/50', text: 'text-indigo-700 dark:text-indigo-400', label: 'Ready for Review' },
+      'Draft': { bg: 'bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800', text: 'text-neutral-600 dark:text-neutral-400', label: 'Draft' },
+      'In Review': { bg: 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50', text: 'text-amber-700 dark:text-amber-400', label: 'In Review' },
       'Exported': { bg: 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-250 dark:border-emerald-900/50', text: 'text-emerald-700 dark:text-emerald-400', label: 'Exported' },
-      'Failed': { bg: 'bg-rose-50 dark:bg-rose-950/20 border-rose-250 dark:border-rose-800/50', text: 'text-rose-700 dark:text-rose-450', label: 'Failed' }
+      'Failed': { bg: 'bg-rose-50 dark:bg-rose-950/20 border-rose-250 dark:border-rose-800/50', text: 'text-rose-700 dark:text-rose-455', label: 'Failed' }
     };
     
     const config = configs[pStatus] || { bg: 'bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800', text: 'text-neutral-600 dark:text-neutral-400', label: pStatus };
     
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 border rounded-full text-xs font-semibold ${config.bg} ${config.text}`}>
+      <span className={`inline-flex items-center px-2 py-0.5 border rounded-full text-xs font-semibold ${config.bg} ${config.text}`}>
         {config.label}
       </span>
     );
@@ -438,7 +480,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
       toast.warning("Inquiry is currently processing. Details will be available once extraction completes.");
       return;
     }
-    onSelectInquiry(inquiry.id);
+    onSelectInquiry(inquiry.id, 'view');
   };
 
   const renderSkeletons = () => {
@@ -490,7 +532,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
           <SearchBar 
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Search Reference No or Customer..."
+            placeholder="Search by keyword"
           />
 
           <IconButton 
@@ -501,7 +543,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
           />
 
           <PrimaryButton icon={Plus} onClick={() => setShowUploadModal(true)}>
-            Add Inquiry
+            Upload Inquiry
           </PrimaryButton>
 
           <IconButton icon={BarChart3} onClick={() => setShowSummary(!showSummary)} title="Summary Widgets" />
@@ -530,7 +572,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
             title="Inquiry Pipeline"
             widgets={[
               { label: 'Total Inquiries', value: inquiries.length, icon: 'ClipboardList' },
-              { label: 'Ready for Review', value: inquiries.filter(i => i.processingStatus === 'Ready for Review').length, icon: 'Clock' },
+              { label: 'In Review', value: inquiries.filter(i => i.processingStatus === 'In Review').length, icon: 'Clock' },
               { label: 'Exported Inquiries', value: inquiries.filter(i => i.processingStatus === 'Exported').length, icon: 'FileText' },
               { label: 'Active Processing', value: inquiries.filter(i => i.processingStatus === 'Uploading' || i.processingStatus === 'Processing').length, icon: 'RefreshCw' },
             ]}
@@ -568,7 +610,7 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
                 >
                   <option value="all">All Validations</option>
                   <option value="valid">Valid</option>
-                  <option value="review-required">Review Required</option>
+                  <option value="review">Review</option>
                   <option value="missing">Missing</option>
                   <option value="pending">Pending</option>
                 </select>
@@ -576,16 +618,16 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
 
               {/* Processing Status */}
               <div>
-                <label className="block text-xs font-semibold text-neutral-450 dark:text-neutral-500 mb-1.5 uppercase tracking-wider">Processing Status</label>
+                <label className="block text-xs font-semibold text-neutral-450 dark:text-neutral-500 mb-1.5 uppercase tracking-wider">Status</label>
                 <select
                   value={processingFilter}
                   onChange={e => setProcessingFilter(e.target.value)}
                   className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 rounded-lg text-sm text-neutral-800 dark:text-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
                 >
-                  <option value="all">All Processing Statuses</option>
-                  <option value="Uploading">Uploading</option>
+                  <option value="all">All Statuses</option>
+                  <option value="Draft">Draft</option>
                   <option value="Processing">Processing</option>
-                  <option value="Ready for Review">Ready for Review</option>
+                  <option value="In Review">In Review</option>
                   <option value="Exported">Exported</option>
                   <option value="Failed">Failed</option>
                 </select>
@@ -653,16 +695,16 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
               <table className="w-full border-collapse text-left text-sm">
                 <thead className="bg-neutral-50 dark:bg-neutral-955 border-b border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold select-none">
                   <tr>
-                    <th className="p-4">Inquiry Ref No.</th>
-                    <th className="p-4">Customer Name</th>
+                    <th className="p-4 whitespace-nowrap min-w-[120px]">Inquiry No.</th>
+                    <th className="p-4">Customer</th>
+                    <th className="p-4">Reference No.</th>
+                    <th className="p-4">Bag Type</th>
                     <th className="p-4">SWL</th>
                     <th className="p-4">SF</th>
                     <th className="p-4 text-right">Qty</th>
-                    <th className="p-4">Uploaded On</th>
-                    <th className="p-4">Exported On</th>
-                    <th className="p-4">Extraction</th>
-                    <th className="p-4">Validation</th>
-                    <th className="p-4">Processing Status</th>
+                    <th className="p-4">Created On</th>
+                    <th className="p-4">Updated On</th>
+                    <th className="p-4 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
@@ -680,28 +722,30 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
             {/* DESKTOP TABLE VIEW */}
             <div className="hidden md:block bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-xs overflow-x-auto">
               <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-neutral-50 dark:bg-neutral-950 border-b border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold select-none">
+                <thead className="bg-neutral-50 dark:bg-neutral-955 border-b border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold select-none">
                   <tr>
-                    <th onClick={() => handleSort('id')} className="p-4 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
-                      Inquiry Ref No. {renderSortArrow('id')}
+                    <th onClick={() => handleSort('id')} className="p-4 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors whitespace-nowrap min-w-[120px]">
+                      Inquiry No. {renderSortArrow('id')}
                     </th>
                     <th onClick={() => handleSort('customerName')} className="p-4 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
-                      Customer Name {renderSortArrow('customerName')}
+                      Customer {renderSortArrow('customerName')}
+                    </th>
+                    <th onClick={() => handleSort('inquiryReference')} className="p-4 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
+                      Reference No. {renderSortArrow('inquiryReference')}
+                    </th>
+                    <th onClick={() => handleSort('bagType')} className="p-4 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
+                      Bag Type {renderSortArrow('bagType')}
                     </th>
                     <th className="p-4">SWL</th>
                     <th className="p-4">SF</th>
                     <th className="p-4 text-right">Qty</th>
                     <th onClick={() => handleSort('requestDate')} className="p-4 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
-                      Uploaded On {renderSortArrow('requestDate')}
+                      Created On {renderSortArrow('requestDate')}
                     </th>
-                    <th onClick={() => handleSort('exportedOn')} className="p-4 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
-                      Exported On {renderSortArrow('exportedOn')}
+                    <th onClick={() => handleSort('updatedOn')} className="p-4 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
+                      Updated On {renderSortArrow('updatedOn')}
                     </th>
-                    <th className="p-4">Extraction</th>
-                    <th className="p-4">Validation</th>
-                    <th onClick={() => handleSort('processingStatus')} className="p-4 cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
-                      Processing Status {renderSortArrow('processingStatus')}
-                    </th>
+                    <th className="p-4 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
@@ -713,16 +757,30 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
                         inquiry.processingStatus === 'Uploading' || inquiry.processingStatus === 'Processing' ? 'opacity-65 !cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent' : ''
                       }`}
                     >
-                      <td className="p-4 font-bold text-primary-600 dark:text-primary-400">{inquiry.id}</td>
-                      <td className="p-4 font-medium text-neutral-900 dark:text-white max-w-[220px] truncate" title={inquiry.customerName}>{inquiry.customerName}</td>
+                      <td className="p-4 font-bold text-primary-600 dark:text-primary-400 whitespace-nowrap">{inquiry.id}</td>
+                      <td className="p-4 font-medium text-neutral-900 dark:text-white max-w-[180px] truncate" title={inquiry.customerName}>{inquiry.customerName}</td>
+                      <td className="p-4 text-neutral-600 dark:text-neutral-300 font-mono whitespace-nowrap">{inquiry.inquiryReference || inquiry.id.replace("INQ", "REF")}</td>
+                      <td className="p-4 text-neutral-600 dark:text-neutral-300 whitespace-nowrap">{inquiry.bagType || "U-Panel"}</td>
                       <td className="p-4 text-neutral-600 dark:text-neutral-300 font-semibold">{inquiry.swl || '-'}</td>
                       <td className="p-4 text-neutral-600 dark:text-neutral-300 font-semibold">{inquiry.sf || '-'}</td>
                       <td className="p-4 text-right font-medium text-neutral-950 dark:text-neutral-100">{inquiry.quantity ? inquiry.quantity.toLocaleString() : '-'}</td>
                       <td className="p-4 text-neutral-500 dark:text-neutral-400 whitespace-nowrap">{formatDateTime(inquiry.requestDate)}</td>
-                      <td className="p-4 text-neutral-500 dark:text-neutral-400 whitespace-nowrap">{inquiry.exportedOn ? formatDateTime(inquiry.exportedOn) : '-'}</td>
-                      <td className="p-4">{getExtractionBadge(inquiry.extraction)}</td>
-                      <td className="p-4">{getValidationBadge(inquiry.validation)}</td>
-                      <td className="p-4">{getProcessingStatusBadge(inquiry.processingStatus)}</td>
+                      <td className="p-4 text-neutral-500 dark:text-neutral-400 whitespace-nowrap">{formatDateTime(inquiry.updatedOn || inquiry.requestDate)}</td>
+                      <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-end">
+                          <IconButton
+                            icon={MoreVertical}
+                            borderless
+                            title="Actions"
+                            menuItems={[
+                              { label: 'View', onClick: () => onSelectInquiry(inquiry.id, 'view') },
+                              { label: 'Edit', onClick: () => onSelectInquiry(inquiry.id, 'edit') },
+                              { label: 'Export', onClick: () => handleExportSingle(inquiry) },
+                              { label: 'Delete', onClick: () => setInquiryToDelete(inquiry) },
+                            ]}
+                          />
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -735,18 +793,35 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
                 <div
                   key={inquiry.id}
                   onClick={() => handleRowClick(inquiry)}
-                  className={`bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 shadow-xs hover:bg-neutral-50 dark:hover:bg-neutral-950/40 transition-colors cursor-pointer relative ${
+                  className={`bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 shadow-xs hover:bg-neutral-50 dark:hover:bg-neutral-955/40 transition-colors cursor-pointer relative ${
                     inquiry.processingStatus === 'Uploading' || inquiry.processingStatus === 'Processing' ? 'opacity-65 !cursor-not-allowed' : ''
                   }`}
                 >
-                  <div className="flex justify-between items-center mb-3">
+                  <div className="flex justify-between items-start mb-3">
                     <span className="font-bold text-primary-600 dark:text-primary-400 text-base">{inquiry.id}</span>
-                    {getProcessingStatusBadge(inquiry.processingStatus)}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <IconButton
+                        icon={MoreVertical}
+                        borderless
+                        title="Actions"
+                        menuItems={[
+                          { label: 'View', onClick: () => onSelectInquiry(inquiry.id, 'view') },
+                          { label: 'Edit', onClick: () => onSelectInquiry(inquiry.id, 'edit') },
+                          { label: 'Export', onClick: () => handleExportSingle(inquiry) },
+                          { label: 'Delete', onClick: () => setInquiryToDelete(inquiry) },
+                        ]}
+                      />
+                    </div>
                   </div>
 
                   <h3 className="font-bold text-neutral-900 dark:text-white text-base mb-2 truncate" title={inquiry.customerName}>
                     {inquiry.customerName}
                   </h3>
+
+                  <div className="space-y-1 text-xs text-neutral-600 dark:text-neutral-400 mb-3">
+                    <div><span className="text-neutral-400 font-medium">Reference:</span> {inquiry.inquiryReference || inquiry.id.replace("INQ", "REF")}</div>
+                    <div><span className="text-neutral-400 font-medium">Bag Type:</span> {inquiry.bagType || "U-Panel"}</div>
+                  </div>
 
                   <div className="grid grid-cols-3 gap-2 mb-3 text-xs bg-neutral-50 dark:bg-neutral-950 p-2 rounded-lg border border-neutral-100 dark:border-neutral-800">
                     <div>
@@ -763,20 +838,15 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+                  <div className="space-y-1.5 text-xs text-neutral-500 dark:text-neutral-400">
                     <div className="flex justify-between">
-                      <span>Uploaded On:</span>
+                      <span>Created On:</span>
                       <span className="font-medium text-neutral-700 dark:text-neutral-300">{formatDateTime(inquiry.requestDate)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Exported On:</span>
-                      <span className="font-medium text-neutral-700 dark:text-neutral-300">{inquiry.exportedOn ? formatDateTime(inquiry.exportedOn) : '-'}</span>
+                      <span>Updated On:</span>
+                      <span className="font-medium text-neutral-700 dark:text-neutral-300">{formatDateTime(inquiry.updatedOn || inquiry.requestDate)}</span>
                     </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800 justify-end">
-                    {getExtractionBadge(inquiry.extraction)}
-                    {getValidationBadge(inquiry.validation)}
                   </div>
                 </div>
               ))}
@@ -818,6 +888,30 @@ export default function InquiryListing({ onSelectInquiry }: { onSelectInquiry: (
           onClose={() => setShowUploadModal(false)}
           onUploadSuccess={handleUploadSuccess}
         />
+
+        <FormModal
+          isOpen={!!inquiryToDelete}
+          onClose={() => setInquiryToDelete(null)}
+          title="Delete Inquiry"
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4 select-none">
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              Are you sure you want to delete this inquiry?
+            </p>
+            <FormFooter className="pt-2 border-t border-neutral-100 dark:border-neutral-850">
+              <SecondaryButton onClick={() => setInquiryToDelete(null)}>
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton 
+                onClick={handleDeleteConfirm}
+                className="bg-red-600 hover:bg-red-700 text-white border-transparent"
+              >
+                Delete
+              </PrimaryButton>
+            </FormFooter>
+          </div>
+        </FormModal>
       </div>
     </div>
   );

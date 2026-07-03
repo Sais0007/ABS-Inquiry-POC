@@ -63,6 +63,7 @@ export default function App() {
   // Default landing page for the ABS POC is now inquiry-listing
   const [currentPage, setCurrentPage] = useState("inquiry-listing");
   const [selectedInquiryId, setSelectedInquiryId] = useState("");
+  const [inquiryMode, setInquiryMode] = useState<"view" | "edit">("view");
 
   const [logoUrl, setLogoUrl] = useState(() => {
     if (typeof window !== "undefined") {
@@ -203,11 +204,13 @@ export default function App() {
             inquiryId={selectedInquiryId} 
             onBack={() => setCurrentPage("inquiry-listing")}
             onSelectInquiry={(id) => setSelectedInquiryId(id)}
+            initialMode={inquiryMode}
           />
         ) : currentPage === "inquiry-listing" ? (
           <InquiryListing 
-            onSelectInquiry={(id) => {
+            onSelectInquiry={(id, mode) => {
               setSelectedInquiryId(id);
+              setInquiryMode(mode || "view");
               setCurrentPage("inquiry-details");
             }}
           />

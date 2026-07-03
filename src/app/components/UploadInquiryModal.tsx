@@ -58,39 +58,22 @@ export default function UploadInquiryModal({
   };
 
   const handleFileAddition = (newFiles: FileList | null) => {
-    if (!newFiles) return;
+    if (!newFiles || newFiles.length === 0) return;
 
-    const updatedQueue = [...files];
-    let hasInvalid = false;
-    let errorMessage = "";
+    const file = newFiles[0];
+    const validation = validateFile(file);
 
-    for (let i = 0; i < newFiles.length; i++) {
-      const file = newFiles[i];
-      const validation = validateFile(file);
-
-      if (!validation.valid) {
-        hasInvalid = true;
-        errorMessage = validation.error || "Invalid file.";
-        continue;
-      }
-
-      // Check if file is already in queue to prevent duplicates
-      const isDuplicate = updatedQueue.some(q => q.file.name === file.name && q.file.size === file.size);
-      if (isDuplicate) continue;
-
-      updatedQueue.push({
-        id: Math.random().toString(36).substring(2, 9),
-        file,
-        progress: 0,
-        status: "idle"
-      });
+    if (!validation.valid) {
+      toast.error(validation.error || "Invalid file.");
+      return;
     }
 
-    setFiles(updatedQueue);
-
-    if (hasInvalid) {
-      toast.error(errorMessage);
-    }
+    setFiles([{
+      id: Math.random().toString(36).substring(2, 9),
+      file,
+      progress: 0,
+      status: "idle"
+    }]);
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -141,9 +124,17 @@ export default function UploadInquiryModal({
             status: "failed", 
             error: "Network error occurred." 
           } : f));
+          setIsUploading(false);
           toast.error("Some uploads failed. Please retry.");
         } else {
-          setFiles(prev => prev.map(f => f.id === fileId ? { ...f, status: "success", progress: 100 } : f));
+          setFiles(prev => {
+            const updated = prev.map(f => f.id === fileId ? { ...f, status: "success", progress: 100 } : f);
+            const successfulFileNames = updated.map(f => f.file.name);
+            onUploadSuccess(successfulFileNames);
+            onClose();
+            return updated;
+          });
+          setIsUploading(false);
         }
       } else {
         setFiles(prev => prev.map(f => f.id === fileId ? { ...f, progress } : f));
@@ -167,26 +158,9 @@ export default function UploadInquiryModal({
   };
 
   const handleRetry = (id: string) => {
+    setIsUploading(true);
     simulateFileUpload(id);
   };
-
-  // Monitor files to auto-close modal once all files are successfully uploaded
-  useEffect(() => {
-    if (!isUploading || files.length === 0) return;
-
-    const allFinished = files.every(f => f.status === "success" || f.status === "failed");
-    const anyFailed = files.some(f => f.status === "failed");
-
-    if (allFinished) {
-      setIsUploading(false);
-      if (!anyFailed) {
-        // All successful! Prepend to listing
-        const successfulFileNames = files.map(f => f.file.name);
-        onUploadSuccess(successfulFileNames);
-        onClose();
-      }
-    }
-  }, [files, isUploading, onUploadSuccess, onClose]);
 
   const handleCancelClick = () => {
     if (isUploading) return;
@@ -232,7 +206,6 @@ export default function UploadInquiryModal({
             type="file"
             ref={fileInputRef}
             onChange={(e) => handleFileAddition(e.target.files)}
-            multiple
             accept=".pdf"
             className="hidden"
           />
@@ -245,22 +218,22 @@ export default function UploadInquiryModal({
           </div>
           <div className="text-center">
             <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
-              {isDragActive ? "Drop files to upload" : "Drag & Drop Inquiry PDFs Here"}
+              {isDragActive ? "Drop file to upload" : "Drag & Drop Inquiry PDF Here"}
             </h4>
             <p className="text-xs text-neutral-400 mt-1">
-              or <span className="text-primary font-medium hover:underline">Browse PDF Files</span>
+              or <span className="text-primary font-medium hover:underline">Browse PDF File</span>
             </p>
           </div>
           <div className="text-[10px] text-neutral-400 flex flex-col items-center gap-1 mt-1 border-t border-neutral-100 dark:border-neutral-800/40 pt-2 w-full max-w-[200px]">
             <span>Supported Format: PDF Only</span>
-            <span>Max File Size: 10 MB per file</span>
+            <span>Max File Size: 10 MB</span>
           </div>
         </div>
 
         {/* Helper info text when empty */}
         {files.length === 0 && (
           <p className="text-center text-xs text-neutral-400 dark:text-neutral-500 italic">
-            You can upload one or multiple inquiry PDFs at the same time.
+            You can upload one inquiry PDF file at a time.
           </p>
         )}
 
@@ -268,7 +241,7 @@ export default function UploadInquiryModal({
         {files.length > 0 && (
           <div className="flex flex-col gap-2.5 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
             <h5 className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider mb-0.5">
-              Upload Queue ({files.length} {files.length === 1 ? "file" : "files"})
+              Selected File
             </h5>
             
             {files.map((queued) => {
